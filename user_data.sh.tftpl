@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -e
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update -y
+apt-get install -y python3 python3-venv python3-pip nodejs npm git
+
+mkdir -p /opt/apps/flask_app /opt/apps/express_app
+
+# ---------- Flask ----------
+cat > /opt/apps/flask_app/app.py <<'PY'
+from flask import Flask, jsonify
+app = Flask(__name__)
+@app.route("/")
+def hello():
+    return jsonify({"app":"flask","message":"Hello from Flask on EC2!"})
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=${flask_port})
+PY
+
+python3 -m venv /opt/apps/flask_app/venv
+/opt/apps/flask_app/venv/bin/pip install --upgrade pip
+/opt/apps/flask_app/venv/bin/pip install flask
+
+cat > /etc/systemd/system/flask.service <<'SERVICE'
+[Unit]
+Description=Flask App
+After=network.target
+[Service]
+User=root
+WorkingDirectory=/opt/apps/flask_app
+ExecStart=/opt/apps/flask_app/venv/bin/python app.py
+Restart=always
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+# ---------- Express ----------
+cat > /opt/apps/express_app/package.json <<'JSON'
+{
+  "name": "express-app",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" }
+}
+JSON
+
+cat > /opt/apps/express_app/server.js <<'JS'
+const express = require('express');
+const app = express();
+app.get('/', (req, res) => {
+  res.json({ app: 'express', message: 'Hello from Express on EC2!' });
+});
+app.listen(${express_port}, '0.0.0.0', () => {
+  console.log('Express listening on ${express_port}');
+});
+JS
+
+cd /opt/apps/express_app
+npm install express --omit=dev
+
+cat > /etc/systemd/system/express.service <<'SERVICE'
+[Unit]
+Description=Express App
+After=network.target
+[Service]
+User=root
+WorkingDirectory=/opt/apps/express_app
+ExecStart=/usr/bin/npm start
+Restart=always
+Environment=NODE_ENV=production
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable flask.service express.service
+systemctl start  flask.service express.service

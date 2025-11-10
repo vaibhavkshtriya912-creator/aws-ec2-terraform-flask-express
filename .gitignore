@@ -1,0 +1,16 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+*.tfvars.json
+.terraform.lock.hcl
+
+# OS/editor junk
+.DS_Store
+*.swp
+*.log
+
+# Secrets/keys (never commit)
+*.pem
